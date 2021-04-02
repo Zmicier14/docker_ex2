@@ -1,0 +1,85 @@
+version: '3'
+services:
+  traefik:
+    image: traefik:v2.2
+    container_name: traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - 8081:80
+      - 8443:443
+    networks:
+      - network1
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/data/traefik.yml:/traefik.yml:ro
+      - ./traefik/data/custom/:/custom/:ro
+      - ./traefik/data/acme.json:/acme.json
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.entrypoints=https"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.example.com`)"
+      - "traefik.http.routers.traefik.tls=true"
+      - "traefik.http.routers.traefik.tls.certresolver=letsEncrypt"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.services.traefik-traefik.loadbalancer.server.port=888"
+      - "traefik.http.middlewares.traefik-auth.basicauth.users=admin:$$apr1$$vDSqkf.v$$GTJOtsd9CBiAFFnHTI2Ds1"
+      - "traefik.http.routers.traefik.middlewares=traefik-auth"
+ # Nginx server configuration   
+  web:
+    image: nginx
+    container_name: webserver
+    depends_on:
+      - docker-mysql
+      - php
+    links:
+      - docker-mysql
+      - php
+    networks:
+      - network1
+      - network2
+    volumes:
+      - ./public:/var/www/html
+      - ./nginx:/etc/nginx/conf.d/
+    ports:
+      - 8080:80
+ # Php-fpm configuration
+  php:
+    image: php:8.0.3-fpm
+    container_name: php
+    networks:
+      - network2
+      - network3
+    volumes:
+      - ./public:/var/www/html
+      - ./php:/usr/local/etc/php/php.ini
+ # Mysql configuration
+  docker-mysql:
+    image: mysql
+    container_name: docker-mysql
+    restart: always
+    environment:
+        - MYSQL_DATABASE=docker_demo
+        - MYSQL_ROOT_PASSWORD=root123
+        - MYSQL_USER=root
+        - MYSQL_PASSWORD=root123
+    ports:
+        - 3306:3306
+    networks:
+      - network3
+    volumes:
+        - /dbdata:/var/lib/mysql
+volumes:
+  dbdata:
+networks:
+  network1:
+    name: network1
+    driver: bridge
+  network2:
+    name: network2
+    driver: bridge
+  network3:
+    name: network3
+    driver: bridge
